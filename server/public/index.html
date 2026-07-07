@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCoF Check-In — Dev</title>
+</head>
+<body>
+    <h1>CCoF Virtual Walk-In — Dev UI</h1>
+    <p>Backend: <code>cd server && npm run dev</code> — open <a href="/">http://localhost:8080/</a></p>
+    <ul>
+        <li><a href="/parent.html">Parent check-in</a></li>
+        <li><a href="/staff.html">Staff queue</a></li>
+        <li><a href="/hello.html">Twilio test</a></li>
+    </ul>
+
+    <h2>API status</h2>
+    <p id="health">Checking...</p>
+
+    <h2>MySQL vs Redis (live queue)</h2>
+    <p id="sync-status">Loading...</p>
+    <p>
+        <button type="button" id="btn-refresh">Refresh</button>
+        <label><input type="checkbox" id="auto-refresh" checked> Auto-refresh every 5s</label>
+    </p>
+
+    <table border="1" cellpadding="6" cellspacing="0" width="100%">
+        <thead>
+            <tr>
+                <th>MySQL</th>
+                <th>Redis</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td valign="top" width="50%"><div id="mysql-table"></div></td>
+                <td valign="top" width="50%"><div id="redis-table"></div></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script src="/js/index.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "name": "ccof-walkin-server",
+  "version": "1.0.0",
+  "description": "CCoF Check-In virtual walk-in queue backend",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "jest --runInBand"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "mysql2": "^3.12.0",
+    "redis": "^4.7.0",
+    "socket.io": "^4.8.1",
+    "twilio": "^6.0.2"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2"
+  }
+}

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCoF — Parent Check-In</title>
+</head>
+<body>
+    <h1>Parent Check-In</h1>
+    <p><a href="/">Back to dev home</a></p>
+
+    <h2>New registration</h2>
+    <form id="checkin-form">
+        <fieldset>
+            <legend>Parent / guardian</legend>
+            <p>
+                <label>First name<br>
+                <input type="text" name="parent_fname" required value="Jane"></label>
+            </p>
+            <p>
+                <label>Last name<br>
+                <input type="text" name="parent_lname" required value="Doe"></label>
+            </p>
+            <p>
+                <label>Phone<br>
+                <input type="tel" name="phone" required value="5551110099"></label>
+            </p>
+            <p>
+                <label>Additional notes<br>
+                <textarea name="additional_notes" rows="2"></textarea></label>
+            </p>
+            <p>
+                <label><input type="checkbox" name="sms_opt_in" checked> SMS opt-in</label>
+            </p>
+        </fieldset>
+
+        <fieldset id="children">
+            <legend>Children</legend>
+            <div class="child-block">
+                <p><label>Child first name<br><input type="text" name="child_fname_0" required value="Tim"></label></p>
+                <p><label>Child last name<br><input type="text" name="child_lname_0" required value="Doe"></label></p>
+                <p><label>Symptoms<br><textarea name="child_symptoms_0" required rows="2">Fever</textarea></label></p>
+            </div>
+        </fieldset>
+
+        <p><button type="button" id="add-child">Add another child</button></p>
+        <p><button type="submit">Check in</button></p>
+    </form>
+
+    <p id="submit-result"></p>
+
+    <h2>Live queue</h2>
+    <p id="socket-status">Connecting...</p>
+    <p id="queue-updated"></p>
+    <div id="queue-table"></div>
+
+    <script src="/js/common.js"></script>
+    <script>
+        var childCount = 1;
+
+        document.getElementById('add-child').addEventListener('click', function () {
+            var block = document.createElement('div');
+            block.className = 'child-block';
+            block.innerHTML =
+                '<hr><p><label>Child first name<br><input type="text" name="child_fname_' + childCount + '" required></label></p>' +
+                '<p><label>Child last name<br><input type="text" name="child_lname_' + childCount + '" required></label></p>' +
+                '<p><label>Symptoms<br><textarea name="child_symptoms_' + childCount + '" required rows="2"></textarea></label></p>';
+            document.getElementById('children').appendChild(block);
+            childCount++;
+        });
+
+        function showQueue(data) {
+            document.getElementById('queue-updated').textContent =
+                'Last updated: ' + (data.updatedAt || '');
+            formatQueueTable(data.entries, 'queue-table');
+        }
+
+        loadQueue(showQueue);
+        connectQueueSocket(showQueue);
+
+        document.getElementById('checkin-form').addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var form = ev.target;
+            var children = [];
+            var i = 0;
+            while (form['child_fname_' + i]) {
+                children.push({
+                    fname: form['child_fname_' + i].value.trim(),
+                    lname: form['child_lname_' + i].value.trim(),
+                    symptoms: form['child_symptoms_' + i].value.trim()
+                });
+                i++;
+            }
+
+            var body = {
+                parent_fname: form.parent_fname.value.trim(),
+                parent_lname: form.parent_lname.value.trim(),
+                phone: form.phone.value.trim(),
+                additional_notes: form.additional_notes.value.trim() || null,
+                sms_opt_in: form.sms_opt_in.checked,
+                children: children
+            };
+
+            fetch(API + '/api/check-in', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+                .then(function (r) {
+                    return r.json().then(function (d) {
+                        if (!r.ok) throw new Error(d.error || r.status);
+                        return d;
+                    });
+                })
+                .then(function (d) {
+                    document.getElementById('submit-result').textContent =
+                        'Checked in. Registration #' + d.registrationid +
+                        '. Entries: ' + d.entries.map(function (e) {
+                            return '#' + e.entryid + ' (pos ' + e.position + ')';
+                        }).join(', ');
+                    if (d.queue) showQueue(d.queue);
+                })
+                .catch(function (e) {
+                    document.getElementById('submit-result').textContent = 'Error: ' + e.message;
+                });
+        });
+    </script>
+</body>
+</html>

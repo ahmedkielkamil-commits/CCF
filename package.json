@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "npm --prefix server test",
+    "test:backend": "npm --prefix server test",
+    "test:parent": "npm --prefix CCOFParentSide test",
+    "test:staff": "npm --prefix CCOFStaffSide test",
+    "test:all": "npm run test:backend && npm run test:parent && npm run test:staff"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2",
+    "supertest": "^7.2.2"
+  }
+}

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCoF — Staff Queue</title>
+</head>
+<body>
+    <h1>Staff Queue Dashboard</h1>
+    <p><a href="/">Back to dev home</a></p>
+
+    <p>
+        <label>Staff name (audit log):
+        <select id="staff-name">
+            <option value="Sarah">Sarah</option>
+            <option value="Mike">Mike</option>
+            <option value="Jordan">Jordan</option>
+        </select></label>
+    </p>
+
+    <h2>Live queue</h2>
+    <p id="socket-status">Connecting...</p>
+    <p id="queue-updated"></p>
+    <div id="queue-table"></div>
+
+    <h2>Actions</h2>
+    <p>Select an entry ID from the table, then:</p>
+    <p>
+        <label>Entry ID <input type="number" id="action-entryid" min="1"></label>
+        <button type="button" id="btn-roomed">Mark roomed</button>
+        <button type="button" id="btn-noshow">Mark no-show</button>
+    </p>
+    <p id="action-result"></p>
+
+    <script src="/js/common.js"></script>
+    <script>
+        function showQueue(data) {
+            document.getElementById('queue-updated').textContent =
+                'Last updated: ' + (data.updatedAt || '');
+            formatStaffTable(data.entries);
+        }
+
+        function formatStaffTable(entries) {
+            var el = document.getElementById('queue-table');
+            if (!entries || entries.length === 0) {
+                el.innerHTML = '<p>No patients in the live queue.</p>';
+                return;
+            }
+
+            var html = '<table border="1" cellpadding="6" cellspacing="0">';
+            html += '<thead><tr>';
+            html += '<th>Pos</th><th>Entry</th><th>Reg</th><th>Patient</th><th>Symptoms</th><th>Status</th><th>Wait</th><th>Pick</th>';
+            html += '</tr></thead><tbody>';
+
+            entries.forEach(function (e) {
+                html += '<tr>';
+                html += '<td>' + e.position + '</td>';
+                html += '<td>' + e.entryid + '</td>';
+                html += '<td>' + e.registrationid + '</td>';
+                html += '<td>' + e.fname + ' ' + e.lname + '</td>';
+                html += '<td>' + (e.symptoms || '') + '</td>';
+                html += '<td>' + e.status + '</td>';
+                html += '<td>' + e.estimatedWait + '</td>';
+                html += '<td><button type="button" data-entryid="' + e.entryid + '">Use #' + e.entryid + '</button></td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            el.innerHTML = html;
+
+            el.querySelectorAll('button[data-entryid]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.getElementById('action-entryid').value = btn.getAttribute('data-entryid');
+                });
+            });
+        }
+
+        function patchStatus(status) {
+            var entryId = document.getElementById('action-entryid').value;
+            var staffName = document.getElementById('staff-name').value;
+            if (!entryId) {
+                document.getElementById('action-result').textContent = 'Enter an entry ID first.';
+                return;
+            }
+
+            fetch(API + '/api/queue/' + entryId, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: status, staff_name: staffName })
+            })
+                .then(function (r) {
+                    return r.json().then(function (d) {
+                        if (!r.ok) throw new Error(d.error || r.status);
+                        return d;
+                    });
+                })
+                .then(function (d) {
+                    document.getElementById('action-result').textContent =
+                        'Entry #' + d.entryid + ' set to ' + d.status + '.';
+                    if (d.queue) showQueue(d.queue);
+                })
+                .catch(function (e) {
+                    document.getElementById('action-result').textContent = 'Error: ' + e.message;
+                });
+        }
+
+        document.getElementById('btn-roomed').addEventListener('click', function () {
+            patchStatus('roomed');
+        });
+        document.getElementById('btn-noshow').addEventListener('click', function () {
+            patchStatus('no_show');
+        });
+
+        loadQueue(showQueue);
+        connectQueueSocket(showQueue);
+    </script>
+</body>
+</html>

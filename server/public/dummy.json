@@ -1,0 +1,42 @@
+{
+  "description": "Live queue patients matching MySQL seed (CCoFSchema.sql entries 1–3). Not included: 4 roomed, 5 no_show, 6 completed.",
+  "source": "mysql_seed_live_queue",
+  "patients": [
+    {
+      "entryid": 1,
+      "registrationid": 1,
+      "fname": "Tim",
+      "lname": "Doe",
+      "symptoms": "Fever and sore throat",
+      "position": 1,
+      "status": "waiting",
+      "parent_fname": "Jane",
+      "parent_lname": "Doe",
+      "phone": "5551110001"
+    },
+    {
+      "entryid": 2,
+      "registrationid": 1,
+      "fname": "Amy",
+      "lname": "Doe",
+      "symptoms": "Cough",
+      "position": 2,
+      "status": "waiting",
+      "parent_fname": "Jane",
+      "parent_lname": "Doe",
+      "phone": "5551110001"
+    },
+    {
+      "entryid": 3,
+      "registrationid": 2,
+      "fname": "Jake",
+      "lname": "Smith",
+      "symptoms": "Ear pain",
+      "position": 3,
+      "status": "arrived",
+      "parent_fname": "John",
+      "parent_lname": "Smith",
+      "phone": "5551110002"
+    }
+  ]
+}

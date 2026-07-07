@@ -1,0 +1,6 @@
+{"sessionId":"963d7f","runId":"parent-vitest-1781557667198","hypothesisId":"H1","location":"CCOFParentSide/src/test/setup.ts:6","message":"parent test setup loaded","data":{"pid":50176},"timestamp":1781557667198}
+{"sessionId":"963d7f","runId":"parent-vitest-1781557667212","hypothesisId":"H1","location":"CCOFParentSide/src/test/setup.ts:6","message":"parent test setup loaded","data":{"pid":50177},"timestamp":1781557667212}
+{"sessionId":"963d7f","runId":"parent-vitest-1781557667212","hypothesisId":"H2","location":"CCOFParentSide/src/test/setup.ts:16","message":"beforeAll reached","data":{"activeHandles":4},"timestamp":1781557667856}
+{"sessionId":"963d7f","runId":"parent-vitest-1781557667198","hypothesisId":"H2","location":"CCOFParentSide/src/test/setup.ts:16","message":"beforeAll reached","data":{"activeHandles":4},"timestamp":1781557667879}
+{"sessionId":"963d7f","runId":"parent-single-run","hypothesisId":"H4","location":"CCOFParentSide/src/pages/JoinPage.test.tsx:10","message":"join page test started","data":{"test":"continue-disabled"},"timestamp":1781557667865}
+{"sessionId":"963d7f","runId":"parent-vitest-1781557667212","hypothesisId":"H3","location":"CCOFParentSide/src/test/setup.ts:27","message":"afterAll reached","data":{"activeHandles":4},"timestamp":1781557669310}
