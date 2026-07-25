@@ -7,6 +7,7 @@ const { getClinicHours, setClinicHours, clearClinicHours } = require('../feature
 const { query } = require('../db/mysql');
 const { getEstimatedWait } = require('../features/_shared/waitTime');
 const { getSyncReport } = require('../features/_shared/sync');
+const { getUsageReport } = require('../features/_shared/usage-analytics');
 const { client } = require('../db/redis');
 const { REDIS_KEYS } = require('../constants');
 const {
@@ -27,6 +28,8 @@ const {
   getResumeSession,
   getResumeSessionByCode,
   cleanupIfRegistrationNotLive,
+  formatDisplayCode,
+  parseResumeCodeInput,
 } = require('../features/_shared/resume-token');
 const { buildAuditRecord } = require('../utils/audit');
 const { safeLog } = require('./hipaa/safeLog');
@@ -42,6 +45,7 @@ const completedRedis = require('../features/completed/redis');
 const completedMysql = require('../features/completed/mysql');
 const noShowRedis = require('../features/no_show/redis');
 const noShowMysql = require('../features/no_show/mysql');
+const { notifyQueueJoined } = require('../features/waiting/queueJoinSms');
 
 const router = express.Router();
 const DEFAULT_QUEUE_MAX_ACTIVE = 50;
@@ -161,12 +165,21 @@ async function checkIn(body) {
     });
 
     const queue = await recalcAndBroadcast();
-    const resume = await issueResumeToken(tempRegistrationId, tempEntryIds);
+    const resume = await issueResumeToken(tempRegistrationId, tempEntryIds, {
+      parentFname: payload.parent_fname,
+      parentLname: payload.parent_lname,
+    });
+    const resultEntries = entries.map((e) => ({ entryid: e.entryid, position: e.position, status: e.status }));
+    notifyQueueJoined({
+      body: payload,
+      entries: resultEntries,
+      resumeCode: resume.code,
+    }).catch(() => undefined);
     return {
       registrationid: tempRegistrationId,
       resumeToken: resume.token,
       resumeCode: resume.code,
-      entries: entries.map((e) => ({ entryid: e.entryid, position: e.position, status: e.status })),
+      entries: resultEntries,
       queue,
       sync: { mode: 'redis_outbox', pending: true },
     };
@@ -194,16 +207,26 @@ async function checkIn(body) {
   try {
     resume = await issueResumeToken(
       registrationid,
-      entries.map((entry) => entry.entryid)
+      entries.map((entry) => entry.entryid),
+      {
+        parentFname: payload.parent_fname,
+        parentLname: payload.parent_lname,
+      }
     );
   } catch (_err) {
     // Resume token requires Redis; keep check-in successful without it.
   }
+  const resultEntries = entries.map((e) => ({ entryid: e.entryid, position: e.position, status: e.status }));
+  notifyQueueJoined({
+    body: payload,
+    entries: resultEntries,
+    resumeCode: resume.code,
+  }).catch(() => undefined);
   return {
     registrationid,
     resumeToken: resume.token,
     resumeCode: resume.code,
-    entries: entries.map((e) => ({ entryid: e.entryid, position: e.position, status: e.status })),
+    entries: resultEntries,
     queue,
     sync: { mode: 'healthy' },
   };
@@ -325,7 +348,7 @@ async function addChildren(tokenOrCode, body) {
     return {
       registrationid,
       resumeToken: session.token,
-      resumeCode: session.code || String(session.token || '').slice(0, 6),
+      resumeCode: formatDisplayCode(session.code, session.initials),
       entries: entries.map((e) => ({ entryid: e.entryid, position: e.position, status: e.status })),
       queue,
       sync: { mode: 'redis_outbox', pending: true },
@@ -361,14 +384,14 @@ async function addChildren(tokenOrCode, body) {
   return {
     registrationid,
     resumeToken: session.token,
-    resumeCode: session.code || String(session.token || '').slice(0, 6),
+    resumeCode: formatDisplayCode(session.code, session.initials),
     entries: entries.map((e) => ({ entryid: e.entryid, position: e.position, status: e.status })),
     queue,
     sync: { mode: 'healthy' },
   };
 }
 
-async function buildResumeResponse(registrationId, resumeToken, resumeCode) {
+async function buildResumeResponse(registrationId, resumeToken, resumeLookupCode, initials) {
   const queue = await buildQueuePayload();
   let rows = [];
   if (await canUseMysql()) {
@@ -423,7 +446,7 @@ async function buildResumeResponse(registrationId, resumeToken, resumeCode) {
   return {
     registrationid: Number(registrationId),
     resumeToken,
-    resumeCode: resumeCode || String(resumeToken || '').slice(0, 6),
+    resumeCode: formatDisplayCode(resumeLookupCode, initials),
     entries,
   };
 }
@@ -431,7 +454,7 @@ async function buildResumeResponse(registrationId, resumeToken, resumeCode) {
 async function resolveResumeSession(tokenOrCode) {
   const raw = String(tokenOrCode || '').trim();
   if (!raw) return null;
-  if (/^\d{6}$/.test(raw)) {
+  if (parseResumeCodeInput(raw)) {
     return getResumeSessionByCode(raw);
   }
   if (/^[A-Za-z0-9_-]{30,}$/.test(raw)) {
@@ -645,7 +668,8 @@ router.get('/parent/resume/:tokenOrCode', async (req, res, next) => {
       await buildResumeResponse(
         session.registrationid,
         session.token,
-        session.code || String(session.token || '').slice(0, 6)
+        session.code,
+        session.initials
       )
     );
   } catch (err) {
@@ -755,6 +779,15 @@ router.get('/clinic/hours', async (_req, res, next) => {
 router.get('/sync', staffIpAllowlist, async (_req, res, next) => {
   try {
     res.json(await getSyncReport());
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/reports/usage', staffIpAllowlist, async (req, res, next) => {
+  try {
+    const days = req.query.days;
+    res.json(await getUsageReport({ days }));
   } catch (err) {
     next(err);
   }

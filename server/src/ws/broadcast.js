@@ -113,6 +113,13 @@ async function buildMonitorPayload() {
   }
 }
 
+function patientInitials(fname, lname) {
+  const first = String(fname || '').trim().charAt(0).toUpperCase();
+  const last = String(lname || '').trim().charAt(0).toUpperCase();
+  if (!first && !last) return '—';
+  return `${first}${last}`;
+}
+
 async function buildMonitorPayloadFromRedis() {
   const members = await client.zRangeWithScores(REDIS_KEYS.live, 0, -1);
   if (members.length === 0) {
@@ -130,6 +137,8 @@ async function buildMonitorPayloadFromRedis() {
     entries.push({
       entryid: entry.entryid,
       registrationid: entry.registrationid,
+      fname: entry.fname,
+      lname: entry.lname,
       ticket: `#${entry.entryid}`,
       position: Number(position),
       status: entry.status,
@@ -157,6 +166,7 @@ async function buildMonitorPayloadFromRedis() {
   const hydratedEntries = entries.map((entry) => ({
     entryid: entry.entryid,
     ticket: entry.ticket,
+    initials: patientInitials(entry.fname, entry.lname),
     position: entry.position,
     status: entry.status,
     estimatedWait: getEstimatedWait(
@@ -207,6 +217,7 @@ async function buildMonitorPayloadFromMysql() {
     return {
       entryid: Number(row.entryid),
       ticket: `#${row.entryid}`,
+      initials: patientInitials(row.fname, row.lname),
       position: Number(row.position),
       status: row.status,
       estimatedWait: getEstimatedWait(Number(row.position), interval.minutes, checkedInAt),

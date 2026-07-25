@@ -28,6 +28,7 @@ export interface QueuePayload {
 export interface MonitorEntry {
   entryid: number;
   ticket: string;
+  initials: string;
   position: number;
   status: QueueStatus;
   estimatedWait: string;

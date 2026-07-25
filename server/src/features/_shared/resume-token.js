@@ -9,7 +9,33 @@ function createToken() {
 }
 
 function createCode() {
-  return String(crypto.randomInt(100000, 1000000));
+  return String(crypto.randomInt(1000, 10000));
+}
+
+function parentInitials(parentFname, parentLname) {
+  const first = String(parentFname || '').trim().charAt(0).toUpperCase();
+  const last = String(parentLname || '').trim().charAt(0).toUpperCase();
+  return `${first}${last}`.trim();
+}
+
+function formatDisplayCode(code, initials) {
+  const digits = String(code || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const lookup = digits.length >= 4 ? digits.slice(0, 4) : digits.padStart(4, '0').slice(-4);
+  const suffix = String(initials || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 2);
+  return suffix ? `${lookup}${suffix}` : lookup;
+}
+
+function parseResumeCodeInput(raw) {
+  const trimmed = String(raw || '').trim();
+  const modern = trimmed.match(/^(\d{4})([A-Za-z]{2})?$/i);
+  if (modern) return { lookupCode: modern[1] };
+  if (/^\d{6}$/.test(trimmed)) return { lookupCode: trimmed, legacy: true };
+  return null;
 }
 
 async function createUniqueCode() {
@@ -23,7 +49,7 @@ async function createUniqueCode() {
   throw e;
 }
 
-async function issueResumeToken(registrationId, entryIds) {
+async function issueResumeToken(registrationId, entryIds, parent = {}) {
   const regId = Number(registrationId);
   const regKey = REDIS_KEYS.resumeRegistration(regId);
   const priorRaw = await client.get(regKey);
@@ -35,10 +61,12 @@ async function issueResumeToken(registrationId, entryIds) {
 
   const token = createToken();
   const code = await createUniqueCode();
+  const initials = parentInitials(parent.parentFname, parent.parentLname);
   const tokenKey = REDIS_KEYS.resumeToken(token);
   const payload = JSON.stringify({
     registrationid: regId,
     code,
+    initials,
     entryids: entryIds.map((id) => Number(id)),
     issuedAt: new Date().toISOString(),
   });
@@ -46,9 +74,9 @@ async function issueResumeToken(registrationId, entryIds) {
   const multi = client.multi();
   multi.setEx(tokenKey, RESUME_TOKEN_TTL_SECONDS, payload);
   multi.setEx(REDIS_KEYS.resumeCode(code), RESUME_TOKEN_TTL_SECONDS, token);
-  multi.setEx(regKey, RESUME_TOKEN_TTL_SECONDS, JSON.stringify({ token, code }));
+  multi.setEx(regKey, RESUME_TOKEN_TTL_SECONDS, JSON.stringify({ token, code, initials }));
   await multi.exec();
-  return { token, code };
+  return { token, code: formatDisplayCode(code, initials) };
 }
 
 async function addEntriesToResumeToken(registrationId, entryIds) {
@@ -76,7 +104,7 @@ async function addEntriesToResumeToken(registrationId, entryIds) {
   if (code) multi.expire(REDIS_KEYS.resumeCode(code), resolvedTtl);
   multi.expire(regKey, resolvedTtl);
   await multi.exec();
-  return { token, code };
+  return { token, code: formatDisplayCode(code, payload.initials) };
 }
 
 async function getResumeSession(token) {
@@ -94,8 +122,10 @@ async function getResumeSession(token) {
   return { ...parsed, token };
 }
 
-async function getResumeSessionByCode(code) {
-  const token = await client.get(REDIS_KEYS.resumeCode(code));
+async function getResumeSessionByCode(codeOrDisplay) {
+  const parsed = parseResumeCodeInput(codeOrDisplay);
+  if (!parsed) return null;
+  const token = await client.get(REDIS_KEYS.resumeCode(parsed.lookupCode));
   if (!token) return null;
   return getResumeSession(token);
 }
@@ -110,9 +140,9 @@ async function cleanupIfRegistrationNotLive(registrationId) {
   let hasLiveEntry = false;
 
   for (const entryId of liveIds) {
-    const raw = await client.get(REDIS_KEYS.entry(entryId));
-    if (!raw) continue;
-    const entry = JSON.parse(raw);
+    const rawEntry = await client.get(REDIS_KEYS.entry(entryId));
+    if (!rawEntry) continue;
+    const entry = JSON.parse(rawEntry);
     if (Number(entry.registrationid) === regId) {
       hasLiveEntry = true;
       break;
@@ -134,4 +164,7 @@ module.exports = {
   getResumeSession,
   getResumeSessionByCode,
   cleanupIfRegistrationNotLive,
+  formatDisplayCode,
+  parseResumeCodeInput,
+  parentInitials,
 };

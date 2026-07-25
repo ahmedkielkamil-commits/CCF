@@ -22,7 +22,9 @@ function loadAppForResumeCancel() {
   }));
   jest.doMock('../src/features/no_show/mysql', () => noShowMysql);
   jest.doMock('../src/features/no_show/redis', () => noShowRedis);
+  const resumeTokenActual = jest.requireActual('../src/features/_shared/resume-token');
   jest.doMock('../src/features/_shared/resume-token', () => ({
+    ...resumeTokenActual,
     issueResumeToken: jest.fn(),
     getResumeSession,
     getResumeSessionByCode,
@@ -97,10 +99,10 @@ describe('resume/cancel edge behavior', () => {
     ctx.getResumeSessionByCode.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     ctx.getResumeSession.mockResolvedValueOnce(null);
 
-    let res = await request(ctx.app).get('/api/parent/resume/123456');
+    let res = await request(ctx.app).get('/api/parent/resume/4829JD');
     expect(res.status).toBe(404);
 
-    res = await request(ctx.app).post('/api/parent/cancel/123456').send({});
+    res = await request(ctx.app).post('/api/parent/cancel/4829JD').send({});
     expect(res.status).toBe(404);
   });
 
@@ -110,7 +112,8 @@ describe('resume/cancel edge behavior', () => {
     ctx.getResumeSessionByCode.mockResolvedValue({
       registrationid: 1,
       token: 'tok',
-      code: '123456',
+      code: '4829',
+      initials: 'JD',
     });
     ctx.query
       .mockResolvedValueOnce([{ entryid: 11 }]) // first cancel pass
@@ -122,11 +125,11 @@ describe('resume/cancel edge behavior', () => {
       status: 'waiting',
     });
 
-    let res = await request(ctx.app).post('/api/parent/cancel/123456').send({});
+    let res = await request(ctx.app).post('/api/parent/cancel/4829JD').send({});
     expect(res.status).toBe(200);
     expect(res.body.cancelledCount).toBe(1);
 
-    res = await request(ctx.app).post('/api/parent/cancel/123456').send({});
+    res = await request(ctx.app).post('/api/parent/cancel/4829JD').send({});
     expect(res.status).toBe(200);
     expect(res.body.cancelledCount).toBe(0);
   });

@@ -16,7 +16,7 @@ describe('MonitorBoardPage', () => {
 
   test('renders monitor rows from payload', async () => {
     mockFetchMonitorQueue.mockResolvedValueOnce({
-      entries: [{ entryid: 1, ticket: '#1', position: 1, status: 'waiting', estimatedWait: '15 min - 30 min' }],
+      entries: [{ entryid: 1, ticket: '#1', initials: 'AD', position: 1, status: 'waiting', estimatedWait: '15 min - 30 min' }],
       roomingInterval: { minutes: 15 },
       updatedAt: '2026-01-01T00:00:00.000Z',
     });
@@ -29,6 +29,7 @@ describe('MonitorBoardPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('#1')).toBeInTheDocument();
+      expect(screen.getByText('AD')).toBeInTheDocument();
     });
   });
 

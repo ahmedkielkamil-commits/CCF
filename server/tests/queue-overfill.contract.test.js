@@ -42,7 +42,7 @@ function loadCheckInAtCapacity() {
     processOutbox: jest.fn(async () => ({ processed: 0, pending: 0 })),
   }));
   jest.doMock('../src/features/_shared/resume-token', () => ({
-    issueResumeToken: jest.fn(async () => ({ token: 'tok', code: '123456' })),
+    issueResumeToken: jest.fn(async () => ({ token: 'tok', code: '4829JD' })),
     getResumeSession: jest.fn(),
     getResumeSessionByCode: jest.fn(),
     cleanupIfRegistrationNotLive: jest.fn(),

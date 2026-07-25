@@ -66,6 +66,7 @@ describe('QueuePage', () => {
     );
 
     expect(screen.getByText('Amy Doe')).toBeInTheDocument();
+    expect(screen.getByText('Countdown')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Mark as Arrived' }));
 
     expect(mockPatchQueueStatus).toHaveBeenCalledWith(1, 'arrived', 'Sarah');

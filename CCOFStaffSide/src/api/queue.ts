@@ -46,6 +46,35 @@ export function fetchSyncReport() {
   return request<SyncReport>('/api/sync');
 }
 
+export interface UsageReport {
+  checkedAt: string;
+  days: number;
+  summary: {
+    totalFamilies: number;
+    totalChildren: number;
+    todayFamilies: number;
+    todayChildren: number;
+    medianJoinToRoomMinutes: number | null;
+    joinToRoomSampleSize: number;
+    noShowRate: number;
+    noShowTotal: number;
+    noShowStaff: number;
+    noShowParentCancel: number;
+  };
+  peakHours: Array<{ hour: number; label: string; families: number }>;
+  dailyUsage: Array<{ date: string; families: number; children: number }>;
+  funnel: {
+    joined: number;
+    reachedClinic: number;
+    roomed: number;
+    completed: number;
+  };
+}
+
+export function fetchUsageReport(days = 14) {
+  return request<UsageReport>(`/api/reports/usage?days=${days}`);
+}
+
 export function fetchHealth() {
   return request<{ ok: boolean }>('/health');
 }

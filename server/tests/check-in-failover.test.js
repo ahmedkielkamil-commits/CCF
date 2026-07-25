@@ -114,7 +114,7 @@ describe('check-in failover modes', () => {
     ctx.waitingRedis.add.mockResolvedValueOnce();
     ctx.enqueueCheckIn.mockResolvedValueOnce();
     ctx.recalcAndBroadcast.mockResolvedValueOnce({ entries: [{ entryid: -20, position: 3 }] });
-    ctx.issueResumeToken.mockResolvedValueOnce({ token: 'tok', code: '123456' });
+    ctx.issueResumeToken.mockResolvedValueOnce({ token: 'tok', code: '4829JD' });
 
     const result = await ctx.checkIn(validBody());
 

@@ -49,10 +49,10 @@ describe('LandingPage', () => {
       </MemoryRouter>
     );
 
-    await user.type(screen.getByPlaceholderText('Enter your access code'), '123456');
+    await user.type(screen.getByPlaceholderText('e.g. 4829JD'), '4829JD');
     await user.click(screen.getByRole('button', { name: 'View My Status' }));
 
-    expect(localStorage.getItem('ccof_resume_token')).toBe('123456');
+    expect(localStorage.getItem('ccof_resume_token')).toBe('4829JD');
     expect(mockNavigate).toHaveBeenCalledWith('/status');
   });
 });

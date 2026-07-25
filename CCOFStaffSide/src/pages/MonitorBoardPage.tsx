@@ -48,7 +48,7 @@ export function MonitorBoardPage() {
     <>
       <StaffPageHeader
         title="Clinic Monitor Board"
-        subtitle="PHI-safe view — no names or symptoms"
+        subtitle="Ticket number and patient initials — no full names or symptoms"
       />
 
       {loading && <p className="muted">Loading monitor board…</p>}
@@ -73,7 +73,12 @@ export function MonitorBoardPage() {
             <tbody>
               {rows.map((entry) => (
                 <tr key={entry.entryid}>
-                  <td>{entry.ticket}</td>
+                  <td>
+                    <span className="monitor-ticket">
+                      {entry.ticket}
+                      <span className="monitor-ticket__initials">{entry.initials}</span>
+                    </span>
+                  </td>
                   <td>
                     <span className="order-dot">{entry.position}</span>
                   </td>

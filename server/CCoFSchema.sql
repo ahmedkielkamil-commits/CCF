@@ -66,6 +66,10 @@ CREATE TABLE `queue_entry`(
 --
 -- After seeding MySQL only, start the API and POST /api/check-in to populate
 -- Redis, or PATCH entry 1–3 to test remove flow against matching rows.
+--
+-- Demo analytics: seed_redis.py also runs scripts/demo_history.sql (~14 days of
+-- completed / no-show history in MySQL only). Run that file manually in Workbench
+-- if you load this schema without the seed script.
 -- -----------------------------------------------------------------------------
 
 INSERT INTO `registration` (
@@ -164,7 +168,7 @@ INSERT INTO `queue_entry` (
     NULL
 );
 
--- Next AUTO_INCREMENT values after explicit seed IDs
+-- Next AUTO_INCREMENT values after explicit live seed IDs (demo_history.sql bumps these further)
 ALTER TABLE `registration` AUTO_INCREMENT = 6;
 ALTER TABLE `queue_entry` AUTO_INCREMENT = 7;
 

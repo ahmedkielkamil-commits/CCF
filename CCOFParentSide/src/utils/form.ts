@@ -40,7 +40,10 @@ function formatWaitRange(calculatedMinutes: number) {
   }
 
   low = Math.max(15, low);
-  const high = Math.min(60, low + 15);
+  let high = Math.min(60, low + 15);
+  if (high < low) {
+    low = Math.max(15, high - 15);
+  }
   return `${low} min - ${high} min`;
 }
 

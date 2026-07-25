@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import { patchQueueStatus } from '../api/queue';
 import { StaffPageHeader, StatusBadge } from '../components/staff-ui';
 import { useQueue } from '../hooks/useQueue';
 import { useStaffName } from '../hooks/useStaffName';
 import type { QueueStatus } from '../types/queue';
+import { formatCountdown, getRemainingSeconds } from '../utils/syncDisplay';
 
 function nextAction(status: QueueStatus) {
   if (status === 'waiting') return { label: 'Mark as Arrived', next: 'arrived' as QueueStatus };
@@ -23,6 +25,14 @@ function formatCheckInTime(value: string) {
 export function QueuePage() {
   const { queue, setQueue, loading, error } = useQueue();
   const { staffName } = useStaffName();
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const intervalMinutes = queue?.roomingInterval?.minutes ?? 15;
 
   async function updateStatus(entryId: number, status: QueueStatus) {
     try {
@@ -68,9 +78,10 @@ export function QueuePage() {
                 <th>Order</th>
                 <th>Patient Name</th>
                 <th>Parent Name</th>
-                <th>Check-In Time</th>
+                <th>Appointment Made</th>
                 <th>Symptom</th>
                 <th>Est. Wait</th>
+                <th>Countdown</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -78,8 +89,12 @@ export function QueuePage() {
             <tbody>
               {rows.map((entry) => {
                 const action = nextAction(entry.status);
+                const remainingSeconds = getRemainingSeconds(entry, intervalMinutes, nowMs);
+                const isOverdue =
+                  remainingSeconds === 0 &&
+                  (entry.status === 'waiting' || entry.status === 'arrived');
                 return (
-                  <tr key={entry.entryid}>
+                  <tr key={entry.entryid} className={isOverdue ? 'queue-row--overdue' : undefined}>
                     <td>
                       <span className="order-dot">{entry.position}</span>
                     </td>
@@ -90,6 +105,12 @@ export function QueuePage() {
                     <td>{formatCheckInTime(entry.checked_in_at)}</td>
                     <td>{entry.symptoms}</td>
                     <td>{entry.estimatedWait}</td>
+                    <td
+                      className={`countdown-cell${isOverdue ? ' countdown-cell--overdue' : ''}`}
+                      title={isOverdue ? 'Estimated wait exceeded' : undefined}
+                    >
+                      {formatCountdown(remainingSeconds)}
+                    </td>
                     <td>
                       <StatusBadge status={entry.status} />
                     </td>

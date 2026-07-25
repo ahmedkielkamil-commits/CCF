@@ -20,13 +20,16 @@ function loadAppWithRedisFailureOnParentCancel() {
   }));
   jest.doMock('../src/features/no_show/mysql', () => noShowMysql);
   jest.doMock('../src/features/no_show/redis', () => noShowRedis);
+  const resumeTokenActual = jest.requireActual('../src/features/_shared/resume-token');
   jest.doMock('../src/features/_shared/resume-token', () => ({
+    ...resumeTokenActual,
     issueResumeToken: jest.fn(),
     getResumeSession: jest.fn(),
     getResumeSessionByCode: jest.fn(async () => ({
       registrationid: 1,
       token: 'mock-token',
-      code: '123456',
+      code: '4829',
+      initials: 'JD',
     })),
     cleanupIfRegistrationNotLive: jest.fn(),
   }));
@@ -100,7 +103,7 @@ describe('parent cancel outage contract', () => {
     ctx.noShowMysql.shift.mockResolvedValueOnce();
     ctx.noShowRedis.remove.mockRejectedValueOnce(new Error('redis down'));
 
-    const res = await request(ctx.app).post('/api/parent/cancel/123456').send({});
+    const res = await request(ctx.app).post('/api/parent/cancel/4829JD').send({});
 
     // This is a resilience contract test. It currently fails and should drive a fix:
     // parent cancel should degrade to mysql-only behavior when Redis is unavailable.

@@ -3,9 +3,9 @@
 Reset MySQL + Redis to the predefined seed state (default) or seed from fallback JSON.
 
 Default behavior (MySQL source) resets MySQL from CCoFSchema.sql first — dropping the
-tables, recreating them, and re-inserting the predefined rows — then mirrors the live
-queue into Redis. This guarantees both stores return to the same known baseline
-(entries 1-3 live) on every run, with no drift from prior live check-ins.
+tables, recreating them, and re-inserting the predefined rows — then loads
+scripts/demo_history.sql (~14 days of MySQL-only analytics history). Only the live
+queue (entries 1-3) is mirrored into Redis. Historical rows stay in MySQL for reports.
 
 WARNING: the default run is destructive. It wipes ALL MySQL data (including live
 check-ins added through the app and audit history). Use --no-reset-schema to instead
@@ -52,6 +52,7 @@ except ImportError:
 SERVER_DIR = Path(__file__).resolve().parent.parent
 DUMMY_PATH = SERVER_DIR / "public" / "dummy.json"
 SCHEMA_PATH = SERVER_DIR / "CCoFSchema.sql"
+DEMO_HISTORY_PATH = SERVER_DIR / "scripts" / "demo_history.sql"
 ENV_PATH = SERVER_DIR / ".env"
 
 LIVE_KEY = "queue:live"
@@ -107,26 +108,30 @@ def resolve_mysql_config(dotenv: dict[str, str]) -> dict:
     }
 
 
-def reset_mysql_schema(mysql_config: dict) -> None:
-    """Drop, recreate, and re-seed MySQL from CCoFSchema.sql (destructive)."""
-    if not SCHEMA_PATH.exists():
-        raise FileNotFoundError(f"Schema file not found: {SCHEMA_PATH}")
+def run_mysql_sql_file(mysql_config: dict, path: Path, *, connect_without_db: bool = False) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"SQL file not found: {path}")
 
-    sql = SCHEMA_PATH.read_text()
-    # The schema runs its own CREATE DATABASE / USE, so connect without a fixed db.
+    sql = path.read_text()
     cfg = {**mysql_config, "client_flag": CLIENT.MULTI_STATEMENTS}
-    cfg.pop("database", None)
+    if connect_without_db:
+        cfg.pop("database", None)
 
     conn = pymysql.connect(**cfg)
     try:
         with conn.cursor() as cursor:
             cursor.execute(sql)
-            # Drain every result set (DROP/CREATE/INSERT + trailing SELECT checks).
             while cursor.nextset():
                 pass
         conn.commit()
     finally:
         conn.close()
+
+
+def reset_mysql_schema(mysql_config: dict) -> None:
+    """Drop, recreate, and re-seed MySQL from CCoFSchema.sql + demo history (destructive)."""
+    run_mysql_sql_file(mysql_config, SCHEMA_PATH, connect_without_db=True)
+    run_mysql_sql_file(mysql_config, DEMO_HISTORY_PATH)
 
 
 def load_patients_from_mysql(mysql_config: dict, refresh_checkin_now: bool = True) -> list[dict]:
@@ -276,7 +281,10 @@ def main() -> None:
             mysql_config = resolve_mysql_config(dotenv)
             if not args.no_reset_schema:
                 reset_mysql_schema(mysql_config)
-                print("Reset MySQL from CCoFSchema.sql (tables dropped, recreated, re-seeded)")
+                print(
+                    "Reset MySQL from CCoFSchema.sql + demo_history.sql "
+                    "(live queue + ~14 days analytics history)"
+                )
             patients = load_patients_from_mysql(mysql_config, refresh_checkin_now=not args.keep_checkin_times)
         except Exception as exc:
             print(f"MySQL load failed: {exc}", file=sys.stderr)

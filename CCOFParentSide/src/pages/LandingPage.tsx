@@ -12,7 +12,6 @@ import {
   CLINIC_MAPS_URL,
   ClockIcon,
   HelpFooter,
-  PeopleIcon,
   PinIcon,
   Screen,
   ShieldIcon,
@@ -26,24 +25,50 @@ const DEFAULT_CLINIC_HOURS = import.meta.env.VITE_CLINIC_HOURS || '8:00 AM - 5:0
 function WaitValue({ text }: { text: string }) {
   const rangeMatch = text.match(/^(\d+)\s*min\s*-\s*(\d+)\s*min$/i);
   if (rangeMatch) {
+    const low = Math.min(Number(rangeMatch[1]), Number(rangeMatch[2]));
+    const high = Math.max(Number(rangeMatch[1]), Number(rangeMatch[2]));
     return (
       <>
-        {rangeMatch[1]}–{rangeMatch[2]}
+        {low}–{high}
         <small>min</small>
       </>
     );
   }
   const compactMatch = text.match(/^(\d+)\s*-\s*(\d+)\s*min$/i);
   if (compactMatch) {
+    const low = Math.min(Number(compactMatch[1]), Number(compactMatch[2]));
+    const high = Math.max(Number(compactMatch[1]), Number(compactMatch[2]));
     return (
       <>
-        {compactMatch[1]}–{compactMatch[2]}
+        {low}–{high}
+        <small>min</small>
+      </>
+    );
+  }
+  const enDashMatch = text.match(/^(\d+)\s*–\s*(\d+)\s*min$/i);
+  if (enDashMatch) {
+    const low = Math.min(Number(enDashMatch[1]), Number(enDashMatch[2]));
+    const high = Math.max(Number(enDashMatch[1]), Number(enDashMatch[2]));
+    return (
+      <>
+        {low}–{high}
         <small>min</small>
       </>
     );
   }
   if (text === "You're next") return <>You're next</>;
   return <>{text}</>;
+}
+
+function formatUpdatedAt(updatedAt?: string) {
+  if (!updatedAt) return 'Updated just now';
+  const updatedMs = new Date(updatedAt).getTime();
+  if (Number.isNaN(updatedMs)) return 'Updated just now';
+  const seconds = Math.max(0, Math.floor((Date.now() - updatedMs) / 1000));
+  if (seconds < 10) return 'Updated just now';
+  if (seconds < 60) return `Updated ${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  return `Updated ${minutes}m ago`;
 }
 
 export function LandingPage() {
@@ -67,6 +92,7 @@ export function LandingPage() {
     const ids = new Set((queue?.entries ?? []).map((entry) => entry.registrationid));
     return ids.size;
   }, [queue]);
+
   const waitText = useMemo(() => {
     return getEstimatedWaitIfJoinNow(familiesAhead, intervalMinutes);
   }, [familiesAhead, intervalMinutes]);
@@ -124,7 +150,7 @@ export function LandingPage() {
         </div>
         <p className="hero__sub">if you join now</p>
         <span className="hero__meta">
-          <ClockIcon size={15} /> Updated just now
+          <ClockIcon size={15} /> {formatUpdatedAt(queue?.updatedAt)}
         </span>
         <button
           type="button"
@@ -141,7 +167,7 @@ export function LandingPage() {
         <input
           type="text"
           className="input"
-          placeholder="Enter your access code"
+          placeholder="e.g. 4829JD"
           value={resumeCode}
           onChange={(event) => setResumeCode(event.target.value)}
         />
@@ -150,28 +176,15 @@ export function LandingPage() {
         </button>
       </section>
 
-      <div className="grid-2">
-        <div className="tile">
-          <div className="tile__head">
-            <span className="chip chip--green">
-              <ClockIcon />
-            </span>
-            <span className="tile__title tile__title--green">Open Now</span>
-          </div>
-          <strong className="tile__hours">{clinicHours}</strong>
-          <p className="tile__body">Walk-in sick visits only</p>
+      <div className="tile">
+        <div className="tile__head">
+          <span className="chip chip--green">
+            <ClockIcon />
+          </span>
+          <span className="tile__title tile__title--green">Open Now</span>
         </div>
-
-        <div className="tile">
-          <div className="tile__head">
-            <span className="chip chip--peach">
-              <PeopleIcon />
-            </span>
-            <span className="tile__title tile__title--maroon">Families Ahead</span>
-          </div>
-          <span className="tile__value">{familiesAhead}</span>
-          <p className="tile__body">in the queue</p>
-        </div>
+        <strong className="tile__hours">{clinicHours}</strong>
+        <p className="tile__body">Walk-in sick visits only</p>
       </div>
 
       <div className="banner">

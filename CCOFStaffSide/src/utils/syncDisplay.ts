@@ -8,11 +8,18 @@ export function formatWaitRange(calculatedMinutes: number) {
     low = Math.max(15, Math.floor((calculatedMinutes - 7) / 5) * 5);
   }
   low = Math.max(15, low);
-  const high = Math.min(60, low + 15);
+  let high = Math.min(60, low + 15);
+  if (high < low) {
+    low = Math.max(15, high - 15);
+  }
   return `${low}–${high} min`;
 }
 
-export function getRemainingSeconds(row: SyncRow, intervalMinutes: number, nowMs: number) {
+export function getRemainingSeconds(
+  row: { position: number; status: string; checked_in_at?: string },
+  intervalMinutes: number,
+  nowMs: number
+) {
   if (row.status !== 'waiting' && row.status !== 'arrived') return null;
   const ahead = Math.max(0, Number(row.position) - 1);
   const baselineSeconds = ahead * intervalMinutes * 60;
