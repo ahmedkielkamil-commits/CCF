@@ -4,8 +4,11 @@ const { client } = require('../db/redis');
 const { query } = require('../db/mysql');
 const { REDIS_KEYS } = require('../constants');
 const { getEstimatedWait, getTime } = require('../features/_shared/waitTime');
-const { liveEntries } = require('../features/_shared/sync-mysql');
-const { canUseRedis } = require('../features/_shared/store-health');
+const { liveEntries, roomedEntries } = require('../features/_shared/sync-mysql');
+const { canUseRedis, canUseMysql } = require('../features/_shared/store-health');
+const { formatDbDatetimeForApi, normalizeTimestamp } = require('../utils/datetime');
+
+const { resolveTimezone, rememberClientTimezone } = require('../utils/timezone');
 
 let io = null;
 
@@ -16,6 +19,16 @@ function initSocket(httpServer) {
       methods: ['GET', 'POST'],
     },
   });
+
+  io.use((socket, next) => {
+    const timezone = resolveTimezone(
+      socket.handshake.auth?.timezone || socket.handshake.query?.timezone || socket.handshake.headers['x-client-timezone']
+    );
+    rememberClientTimezone(timezone);
+    socket.data.clientTimezone = timezone;
+    next();
+  });
+
   return io;
 }
 
@@ -76,7 +89,7 @@ async function buildQueuePayloadFromRedis() {
         {
           parent_fname: row.parent_fname,
           parent_lname: row.parent_lname,
-          checked_in_at: row.checked_in_at instanceof Date ? row.checked_in_at.toISOString() : String(row.checked_in_at),
+          checked_in_at: formatDbDatetimeForApi(row.checked_in_at),
         },
       ])
     );
@@ -84,7 +97,8 @@ async function buildQueuePayloadFromRedis() {
 
   const hydratedEntries = entries.map((entry) => {
     const parent = parentByRegistration.get(Number(entry.registrationid));
-    const checkedInAt = parent?.checked_in_at ?? '';
+    const checkedInAt =
+      parent?.checked_in_at || normalizeTimestamp(entry.checked_in_at) || '';
     return {
       ...entry,
       parent_fname: parent?.parent_fname ?? '',
@@ -94,8 +108,11 @@ async function buildQueuePayloadFromRedis() {
     };
   });
 
+  const inRoom = await buildInRoomPayload();
+
   return {
     entries: hydratedEntries,
+    inRoom,
     roomingInterval: interval,
     updatedAt: new Date().toISOString(),
   };
@@ -111,6 +128,29 @@ async function buildMonitorPayload() {
   } catch (_err) {
     return buildMonitorPayloadFromMysql();
   }
+}
+
+function mapRoomedRow(row) {
+  const checkedInAt = formatDbDatetimeForApi(row.checked_in_at);
+  return {
+    entryid: Number(row.entryid),
+    registrationid: Number(row.registrationid),
+    fname: row.fname,
+    lname: row.lname,
+    symptoms: row.symptoms,
+    position: Number(row.position),
+    status: row.status,
+    parent_fname: row.parent_fname || '',
+    parent_lname: row.parent_lname || '',
+    checked_in_at: checkedInAt,
+    estimatedWait: '—',
+  };
+}
+
+async function buildInRoomPayload() {
+  if (!(await canUseMysql())) return [];
+  const rows = await roomedEntries();
+  return rows.map(mapRoomedRow);
 }
 
 function patientInitials(fname, lname) {
@@ -158,7 +198,7 @@ async function buildMonitorPayloadFromRedis() {
     checkedInByRegistration = new Map(
       rows.map((row) => [
         Number(row.registrationid),
-        row.checked_in_at instanceof Date ? row.checked_in_at.toISOString() : String(row.checked_in_at),
+        formatDbDatetimeForApi(row.checked_in_at),
       ])
     );
   }
@@ -184,10 +224,9 @@ async function buildMonitorPayloadFromRedis() {
 }
 
 async function buildQueuePayloadFromMysql() {
-  const [rows, interval] = await Promise.all([liveEntries(), getTime()]);
+  const [rows, interval, inRoom] = await Promise.all([liveEntries(), getTime(), buildInRoomPayload()]);
   const entries = rows.map((row) => {
-    const checkedInAt =
-      row.checked_in_at instanceof Date ? row.checked_in_at.toISOString() : String(row.checked_in_at || '');
+    const checkedInAt = formatDbDatetimeForApi(row.checked_in_at);
     return {
       entryid: Number(row.entryid),
       registrationid: Number(row.registrationid),
@@ -204,6 +243,7 @@ async function buildQueuePayloadFromMysql() {
   });
   return {
     entries,
+    inRoom,
     roomingInterval: interval,
     updatedAt: new Date().toISOString(),
   };
@@ -212,8 +252,7 @@ async function buildQueuePayloadFromMysql() {
 async function buildMonitorPayloadFromMysql() {
   const [rows, interval] = await Promise.all([liveEntries(), getTime()]);
   const entries = rows.map((row) => {
-    const checkedInAt =
-      row.checked_in_at instanceof Date ? row.checked_in_at.toISOString() : String(row.checked_in_at || '');
+    const checkedInAt = formatDbDatetimeForApi(row.checked_in_at);
     return {
       entryid: Number(row.entryid),
       ticket: `#${row.entryid}`,

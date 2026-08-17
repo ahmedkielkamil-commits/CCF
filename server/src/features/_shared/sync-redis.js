@@ -1,5 +1,6 @@
 const { client } = require('../../db/redis');
 const { REDIS_KEYS } = require('../../constants');
+const { normalizeTimestamp } = require('../../utils/datetime');
 
 async function liveEntries() {
   const members = await client.zRangeWithScores(REDIS_KEYS.live, 0, -1);
@@ -26,7 +27,7 @@ async function liveEntries() {
       fname: e.fname,
       lname: e.lname,
       symptoms: e.symptoms,
-      checked_in_at: e.checked_in_at || '',
+      checked_in_at: normalizeTimestamp(e.checked_in_at) || '',
       position: Number(position),
       status: e.status,
     });

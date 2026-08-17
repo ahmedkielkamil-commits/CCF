@@ -13,13 +13,18 @@ npm run dev
 
 Copy `.env.example` to `.env`:
 
-- `VITE_API_URL` - backend base URL
+- `VITE_API_URL` - backend base URL for REST and WebSocket (local: `http://localhost:8080`)
 - `VITE_CLINIC_HOURS` - optional landing-hours display
 - `VITE_SHOW_DEV_LINKS` - optional dev cross-app link toggle
 
+For Cloud Run, set `VITE_API_URL` to your deployed backend URL before building:
+
+```bash
+VITE_API_URL=https://your-backend.run.app npm run build
+```
+
 ## Known backend gaps
 
-- Parent "I've Arrived" currently uses `PATCH /api/queue/:entryId` which is staff IP-restricted.
 - "Leave the List" has no backend endpoint yet.
 # React + TypeScript + Vite
 

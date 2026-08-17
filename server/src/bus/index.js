@@ -46,6 +46,10 @@ const completedMysql = require('../features/completed/mysql');
 const noShowRedis = require('../features/no_show/redis');
 const noShowMysql = require('../features/no_show/mysql');
 const { notifyQueueJoined } = require('../features/waiting/queueJoinSms');
+const { notifyArrived } = require('../features/arrived/arrivedSms');
+const { notifyRoomed } = require('../features/roomed/roomedSms');
+const { notifyCompleted } = require('../features/completed/completedSms');
+const { loadRegistrationContact } = require('../features/_shared/registrationContact');
 
 const router = express.Router();
 const DEFAULT_QUEUE_MAX_ACTIVE = 50;
@@ -463,6 +467,12 @@ async function resolveResumeSession(tokenOrCode) {
   return null;
 }
 
+async function notifyRegistrationSms(registrationId, notifyFn) {
+  const contact = await loadRegistrationContact(registrationId);
+  if (!contact) return;
+  await notifyFn(contact);
+}
+
 async function applyArrived(entryId, staffName, req) {
   await processOutbox();
   const prev = await load(entryId);
@@ -488,6 +498,9 @@ async function applyArrived(entryId, staffName, req) {
     if (await canUseRedis()) await arrivedRedis.apply(entryId);
   } catch (_err) {
     // MySQL remains source of truth for this path.
+  }
+  if (prev.status !== 'arrived') {
+    notifyRegistrationSms(prev.registrationid, notifyArrived).catch(() => undefined);
   }
   const queue = await recalcAndBroadcast();
   return { entryid: Number(entryId), status: 'arrived', queue };
@@ -518,6 +531,14 @@ async function applyCompleted(entryId, staffName, req) {
     if (await canUseRedis()) await completedRedis.apply(entryId);
   } catch (_err) {
     // MySQL remains source of truth for this path.
+  }
+  try {
+    if (await canUseRedis()) await cleanupIfRegistrationNotLive(prev.registrationid);
+  } catch (_err) {
+    // Non-fatal resume cleanup failure.
+  }
+  if (prev.status !== 'completed') {
+    notifyRegistrationSms(prev.registrationid, notifyCompleted).catch(() => undefined);
   }
   const queue = await recalcAndBroadcast();
   return { entryid: Number(entryId), status: 'completed', queue };
@@ -553,10 +574,12 @@ async function applyRoomed(entryId, staffName, req) {
   try {
     if (await canUseRedis()) {
       await roomedRedis.remove(entryId, prev.position);
-      await cleanupIfRegistrationNotLive(prev.registrationid);
     }
   } catch (_err) {
     // MySQL remains source of truth for this path.
+  }
+  if (prev.status !== 'roomed') {
+    notifyRegistrationSms(prev.registrationid, notifyRoomed).catch(() => undefined);
   }
   const queue = await recalcAndBroadcast();
   return { entryid: Number(entryId), status: 'roomed', queue };
@@ -577,21 +600,22 @@ async function applyNoShow(entryId, staffName, req) {
     staffName: requireStaff(staffName),
     req,
   });
+  const wasInLiveQueue = prev.status === 'waiting' || prev.status === 'arrived';
   const mysqlUp = await canUseMysql();
   if (mysqlUp) {
     await noShowMysql.apply(entryId, audit);
-    await noShowMysql.shift(prev.position);
+    if (wasInLiveQueue) await noShowMysql.shift(prev.position);
   } else {
     await enqueueStatusUpdate({
       status: 'no_show',
       entryId: Number(entryId),
-      removedPosition: Number(prev.position),
+      ...(wasInLiveQueue ? { removedPosition: Number(prev.position) } : {}),
       audit,
     });
   }
   try {
     if (await canUseRedis()) {
-      await noShowRedis.remove(entryId, prev.position);
+      if (wasInLiveQueue) await noShowRedis.remove(entryId, prev.position);
       await cleanupIfRegistrationNotLive(prev.registrationid);
     }
   } catch (_err) {

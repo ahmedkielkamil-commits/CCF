@@ -22,11 +22,8 @@ function positionLabel(entries) {
 }
 
 function buildQueueJoinMessage({ body, entries, resumeCode }) {
-  const names = childNames(body.children);
-  const verb = body.children.length === 1 ? 'has' : 'have';
   const displayCode = formatDisplayCode(resumeCode, parentInitials(body.parent_fname, body.parent_lname));
-  const codePart = displayCode ? ` Access code: ${displayCode}.` : '';
-  return `Hi ${body.parent_fname}, ${names} ${verb} been added to the walk-in queue (${positionLabel(entries)}).${codePart} ${CLINIC_NAME}`;
+  return `Your child has been added to the walk-in queue at The Children's Clinic of Fredericksburg. You are currently in ${positionLabel(entries)}. Your access code is ${displayCode}. We will text you with updates as your turn approaches.`;
 }
 
 async function notifyQueueJoined({ body, entries, resumeCode }) {

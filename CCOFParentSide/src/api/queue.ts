@@ -5,7 +5,6 @@ import type {
   ClinicHoursResponse,
   ParentResumeResponse,
   QueuePayload,
-  QueueStatus,
   WaitInterval,
 } from '../types/queue';
 import { request } from './client';
@@ -35,14 +34,6 @@ export function addChildrenToRegistration(tokenOrCode: string, children: CheckIn
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ children }),
-  });
-}
-
-export function patchQueueStatus(entryId: number, status: QueueStatus, staffName: string) {
-  return request<{ entryid: number; status: QueueStatus; queue?: QueuePayload }>(`/api/queue/${entryId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status, staff_name: staffName }),
   });
 }
 

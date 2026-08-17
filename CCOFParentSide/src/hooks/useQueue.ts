@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { fetchQueue } from '../api/queue';
 import { getApiBase } from '../api/client';
+import { getClientTimezone } from '../utils/timezone';
 import type { QueuePayload } from '../types/queue';
 
 export function useQueue() {
@@ -35,6 +36,8 @@ export function useQueue() {
 
     socket = io(getApiBase(), {
       transports: ['websocket', 'polling'],
+      auth: { timezone: getClientTimezone() },
+      query: { timezone: getClientTimezone() },
     });
 
     socket.on('queue:update', (payload: QueuePayload) => {

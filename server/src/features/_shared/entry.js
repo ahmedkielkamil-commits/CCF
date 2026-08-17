@@ -1,6 +1,6 @@
 const { client } = require('../../db/redis');
 const { REDIS_KEYS } = require('../../constants');
-const { query } = require('../../db/mysql');
+const { formatDbDatetimeForApi } = require('../../utils/datetime');
 
 async function load(entryId) {
   try {
@@ -30,8 +30,7 @@ async function load(entryId) {
     symptoms: row.symptoms,
     position: Number(row.position),
     status: row.status,
-    checked_in_at:
-      row.checked_in_at instanceof Date ? row.checked_in_at.toISOString() : String(row.checked_in_at || ''),
+    checked_in_at: formatDbDatetimeForApi(row.checked_in_at),
   };
 }
 

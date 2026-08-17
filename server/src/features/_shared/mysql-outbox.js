@@ -8,6 +8,7 @@ const { REDIS_KEYS } = require('../../constants');
 const { safeLog } = require('../../bus/hipaa/safeLog');
 const { canUseMysql, canUseRedis } = require('./store-health');
 const { addEntriesToResumeToken } = require('./resume-token');
+const { normalizeRedisEntry } = require('../../utils/datetime');
 
 const RESUME_TOKEN_TTL_SECONDS = 60 * 60 * 24;
 const MAX_BATCH = 50;
@@ -131,7 +132,7 @@ async function promoteAppendedRedisEntries({ realRegistrationId, tempEntryIds, r
     const raw = await client.get(REDIS_KEYS.entry(tempId));
     if (!raw) continue;
     const entry = JSON.parse(raw);
-    const next = { ...entry, entryid: realId, registrationid: realRegistrationId };
+    const next = normalizeRedisEntry({ ...entry, entryid: realId, registrationid: realRegistrationId });
 
     const multi = client.multi();
     if (score !== null) {
@@ -168,7 +169,9 @@ async function applyStatusEvent(event) {
   }
   if (event.status === 'no_show') {
     await noShowMysql.apply(entryId, audit);
-    await noShowMysql.shift(Number(event.removedPosition));
+    if (Number.isFinite(Number(event.removedPosition))) {
+      await noShowMysql.shift(Number(event.removedPosition));
+    }
     return;
   }
   throw new Error(`Unsupported status outbox event: ${event.status}`);
@@ -187,11 +190,11 @@ async function promoteRedisEntries({
     const raw = await client.get(REDIS_KEYS.entry(tempId));
     if (!raw) continue;
     const entry = JSON.parse(raw);
-    const next = {
+    const next = normalizeRedisEntry({
       ...entry,
       entryid: realId,
       registrationid: realRegistrationId,
-    };
+    });
 
     const multi = client.multi();
     if (score !== null) {

@@ -645,6 +645,17 @@ body {
   color: var(--muted);
 }
 
+.status-roadmap-card__complete {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(45, 106, 79, 0.08);
+  color: var(--maroon);
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 .roadmap {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

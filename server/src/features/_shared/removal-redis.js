@@ -1,5 +1,7 @@
 const { client } = require('../../db/redis');
 const { REDIS_KEYS } = require('../../constants');
+const { sendPositionNotification } = require('./positionSms');
+const { loadRegistrationContacts } = require('./registrationContact');
 
 async function remove(entryId, removedPosition) {
   await client.zRem(REDIS_KEYS.live, String(entryId));
@@ -22,6 +24,22 @@ async function remove(entryId, removedPosition) {
     multi.set(REDIS_KEYS.entry(id), JSON.stringify(parsed));
   }
   await multi.exec();
+
+  const registrationIds = updates.map((update) => Number(update.parsed.registrationid));
+  const contacts = await loadRegistrationContacts(registrationIds);
+  const notified = new Set();
+
+  for (const { newPosition, parsed } of updates) {
+    const registrationId = Number(parsed.registrationid);
+    const contact = contacts.get(registrationId);
+    if (!contact) continue;
+
+    const dedupeKey = `${registrationId}:${newPosition}`;
+    if (notified.has(dedupeKey)) continue;
+    notified.add(dedupeKey);
+
+    sendPositionNotification(contact.phone, newPosition, contact.sms_opt_in).catch(() => undefined);
+  }
 }
 
 module.exports = { remove };

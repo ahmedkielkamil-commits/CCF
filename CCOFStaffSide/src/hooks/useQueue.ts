@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { getApiBase } from '../api/client';
+import { getClientTimezone } from '../utils/timezone';
 import { fetchQueue } from '../api/queue';
 import type { QueuePayload } from '../types/queue';
 
@@ -35,6 +36,8 @@ export function useQueue() {
 
     socket = io(getApiBase(), {
       transports: ['websocket', 'polling'],
+      auth: { timezone: getClientTimezone() },
+      query: { timezone: getClientTimezone() },
     });
 
     socket.on('queue:update', (payload: QueuePayload) => {
@@ -55,10 +58,11 @@ export function useQueue() {
 
   const counts = useMemo(() => {
     const entries = queue?.entries ?? [];
+    const inRoom = queue?.inRoom ?? [];
     return {
       total: entries.length,
       waitingOutside: entries.filter((entry) => entry.status === 'waiting').length,
-      beingSeen: entries.filter((entry) => entry.status === 'roomed').length,
+      beingSeen: inRoom.length,
     };
   }, [queue]);
 

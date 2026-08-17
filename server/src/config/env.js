@@ -27,6 +27,7 @@ const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   mysql: {
     host: requireEnv('MYSQL_HOST'),
+    port: Number(process.env.MYSQL_PORT) || 3306,
     user: requireEnv('MYSQL_USER'),
     password: process.env.MYSQL_PASSWORD ?? '',
     database: requireEnv('MYSQL_DATABASE'),
@@ -34,6 +35,7 @@ const env = {
   redisUrl: buildRedisUrl(),
   avgVisitMinutes: Number(process.env.AVG_VISIT_MINUTES) || 15,
   clinicHours: process.env.CLINIC_HOURS || '8:00 AM - 5:00 PM',
+  clinicTimezone: process.env.CLINIC_TIMEZONE || 'America/New_York',
   corsOrigins: (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((o) => o.trim())

@@ -37,7 +37,7 @@ export function HelpFooter() {
         <small>Call us at {CLINIC_PHONE_DISPLAY}</small>
       </span>
       <span className="help-footer__phone">
-        <PhoneIcon />
+        <PhoneIcon size={32} />
       </span>
     </a>
   );

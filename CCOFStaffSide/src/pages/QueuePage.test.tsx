@@ -46,6 +46,21 @@ describe('QueuePage', () => {
             estimatedWait: '15 min - 30 min',
           },
         ],
+        inRoom: [
+          {
+            entryid: 2,
+            registrationid: 12,
+            fname: 'Ben',
+            lname: 'Lee',
+            parent_fname: 'Kim',
+            parent_lname: 'Lee',
+            checked_in_at: '2026-01-01T11:00:00.000Z',
+            symptoms: 'Cough',
+            position: 2,
+            status: 'roomed',
+            estimatedWait: '—',
+          },
+        ],
       },
     });
     vi.spyOn(window, 'alert').mockImplementation(() => undefined);
@@ -71,6 +86,18 @@ describe('QueuePage', () => {
 
     expect(mockPatchQueueStatus).toHaveBeenCalledWith(1, 'arrived', 'Sarah');
     expect(mockSetQueue).toHaveBeenCalled();
+  });
+
+  test('renders in-room section with complete action', () => {
+    render(
+      <MemoryRouter>
+        <QueuePage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('In Room')).toBeInTheDocument();
+    expect(screen.getByText('Ben Lee')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Complete Visit' })).toBeInTheDocument();
   });
 
   test('shows allowlist alert when status update is forbidden', async () => {

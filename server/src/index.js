@@ -10,6 +10,7 @@ const bus = require('./bus');
 const { initSocket } = require('./ws/broadcast');
 const { safeLog } = require('./bus/hipaa/safeLog');
 const enforceHttps = require('./bus/hipaa/enforceHttps');
+const clientTimezone = require('./middleware/clientTimezone');
 const { sendSMS } = require('./features/waiting/twilio');
 const { processOutbox } = require('./features/_shared/mysql-outbox');
 
@@ -33,6 +34,7 @@ app.use(
 app.use(
   cors({
     origin: env.corsOrigins.length > 0 ? env.corsOrigins : true,
+    allowedHeaders: ['Content-Type', 'X-Client-Timezone'],
   })
 );
 app.use(express.json());
@@ -52,7 +54,7 @@ app.post('/test-sms', async (req, res, next) => {
   }
 });
 
-app.use('/api', bus);
+app.use('/api', clientTimezone, bus);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

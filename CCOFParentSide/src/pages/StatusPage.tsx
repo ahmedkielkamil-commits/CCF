@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import { cancelParentCheckIn, fetchParentResume, patchQueueStatus } from '../api/queue';
+import { cancelParentCheckIn, fetchParentResume } from '../api/queue';
 import { useCheckInDraft } from '../context/CheckInContext';
 import { useQueue } from '../hooks/useQueue';
 import type { CheckInChild, CheckInResponse, ParentResumeResponse, QueueEntry, QueueStatus } from '../types/queue';
@@ -73,12 +73,12 @@ function roadmapStepState(status: QueueStatus) {
     return ROADMAP_STEPS.map(() => 'done' as const);
   }
   if (status === 'roomed') {
-    return ['done', 'done', 'current', 'upcoming'] as const;
+    return ['done', 'done', 'done', 'current'] as const;
   }
   if (status === 'arrived') {
-    return ['done', 'current', 'upcoming', 'upcoming'] as const;
+    return ['done', 'done', 'current', 'upcoming'] as const;
   }
-  return ['current', 'upcoming', 'upcoming', 'upcoming'] as const;
+  return ['done', 'current', 'upcoming', 'upcoming'] as const;
 }
 
 function isLiveQueueStatus(status: QueueStatus) {
@@ -88,7 +88,7 @@ function isLiveQueueStatus(status: QueueStatus) {
 function statusHeadline(status: QueueStatus) {
   if (status === 'no_show') return 'No show';
   if (status === 'roomed') return 'In room';
-  if (status === 'completed') return 'Complete';
+  if (status === 'completed') return 'Visit complete';
   return status.replace('_', ' ');
 }
 
@@ -110,6 +110,7 @@ function ChildRoadmapCard({
 }) {
   const stepStates = roadmapStepState(entry.status);
   const showQueueMeta = isLiveQueueStatus(entry.status);
+  const showRoadmap = entry.status !== 'completed';
 
   return (
     <article className="status-roadmap-card">
@@ -131,28 +132,35 @@ function ChildRoadmapCard({
             <>
               <p className="status-roadmap-card__label">Status</p>
               <p className="status-roadmap-card__position">{statusHeadline(entry.status)}</p>
+              {entry.status === 'roomed' && (
+                <p className="status-roadmap-card__wait">Visit in progress</p>
+              )}
             </>
           )}
         </div>
       </div>
 
-      <div className="roadmap" aria-label={`Progress for ${entry.name || 'child'}`}>
-        {ROADMAP_STEPS.map((label, index) => {
-          const state = stepStates[index];
-          const connectorDone = index > 0 && stepStates[index - 1] === 'done';
-          return (
-            <div key={label} className="roadmap__step">
-              {index > 0 && <span className={`roadmap__connector${connectorDone ? ' roadmap__connector--done' : ''}`} aria-hidden />}
-              <span className={`roadmap__dot roadmap__dot--${state}`}>
-                {state === 'done' ? <CheckIcon size={14} /> : null}
-              </span>
-              <span className={`roadmap__label${state === 'current' || state === 'done' ? ' roadmap__label--active' : ''}`}>
-                {label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {showRoadmap ? (
+        <div className="roadmap" aria-label={`Progress for ${entry.name || 'child'}`}>
+          {ROADMAP_STEPS.map((label, index) => {
+            const state = stepStates[index];
+            const connectorDone = index > 0 && stepStates[index - 1] === 'done';
+            return (
+              <div key={label} className="roadmap__step">
+                {index > 0 && <span className={`roadmap__connector${connectorDone ? ' roadmap__connector--done' : ''}`} aria-hidden />}
+                <span className={`roadmap__dot roadmap__dot--${state}`}>
+                  {state === 'done' ? <CheckIcon size={14} /> : null}
+                </span>
+                <span className={`roadmap__label${state === 'current' || state === 'done' ? ' roadmap__label--active' : ''}`}>
+                  {label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="status-roadmap-card__complete">Thank you for visiting today.</p>
+      )}
     </article>
   );
 }
@@ -162,7 +170,6 @@ export function StatusPage() {
   const { resetDraft } = useCheckInDraft();
   const { queue, setQueue } = useQueue();
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [acting, setActing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [resumeView, setResumeView] = useState<ResumeView | null>(null);
   const [loadingResume, setLoadingResume] = useState(true);
@@ -246,36 +253,55 @@ export function StatusPage() {
     const credential = resumeView.resumeToken || resumeView.resumeCode || localStorage.getItem(RESUME_TOKEN_STORAGE_KEY);
     if (!credential) return undefined;
 
-    let cancelled = false;
-
-    async function syncFromServer() {
-      try {
-        const data = await fetchParentResume(credential!);
-        if (!cancelled) applyResumeResponse(data);
-      } catch (error) {
-        if (!cancelled && error instanceof ApiError && error.status === 404) {
-          clearStoredRegistration();
-        }
-      }
-    }
-
-    syncFromServer().catch(() => undefined);
-
     const timer = setInterval(() => {
-      syncFromServer().catch(() => undefined);
+      refreshResume(credential).catch(() => undefined);
     }, 8000);
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [queue?.updatedAt, resumeView?.registrationid, applyResumeResponse, clearStoredRegistration]);
+    return () => clearInterval(timer);
+  }, [resumeView?.registrationid, resumeView?.resumeToken, resumeView?.resumeCode, refreshResume]);
 
-  const liveByEntry = useMemo(() => {
+  useEffect(() => {
+    if (!resumeView || !queue?.updatedAt) return undefined;
+
+    const credential = resumeView.resumeToken || resumeView.resumeCode || localStorage.getItem(RESUME_TOKEN_STORAGE_KEY);
+    if (!credential) return undefined;
+
+    refreshResume(credential).catch(() => undefined);
+  }, [queue?.updatedAt, resumeView, refreshResume]);
+
+  const statusByEntry = useMemo(() => {
     const map = new Map<number, QueueEntry>();
-    queue?.entries.forEach((entry) => map.set(entry.entryid, entry));
+    const registrationId = resumeView?.registrationid;
+    if (!registrationId) return map;
+
+    for (const entry of queue?.entries ?? []) {
+      if (Number(entry.registrationid) === Number(registrationId)) {
+        map.set(entry.entryid, entry);
+      }
+    }
+    for (const entry of queue?.inRoom ?? []) {
+      if (Number(entry.registrationid) === Number(registrationId)) {
+        map.set(entry.entryid, entry);
+      }
+    }
     return map;
-  }, [queue]);
+  }, [queue, resumeView?.registrationid]);
+
+  const registrationEntries = useMemo(() => {
+    if (!resumeView) return [];
+    return resumeView.entries.map((entry) => {
+      const live = statusByEntry.get(entry.entryid);
+      const status = live?.status ?? entry.status;
+      return {
+        entryid: entry.entryid,
+        name: entry.name,
+        symptoms: entry.symptoms,
+        position: isLiveQueueStatus(status) ? (live?.position ?? entry.position) : entry.position,
+        status,
+        estimatedWait: isLiveQueueStatus(status) ? (live?.estimatedWait ?? entry.estimatedWait ?? '—') : '—',
+      };
+    });
+  }, [resumeView, statusByEntry]);
 
   async function handleResumeByCode() {
     if (!resumeCodeInput.trim()) return;
@@ -331,49 +357,6 @@ export function StatusPage() {
     );
   }
 
-  const registrationEntries = resumeView.entries.map((entry) => {
-    const live = liveByEntry.get(entry.entryid);
-    const status = live?.status ?? entry.status;
-    return {
-      entryid: entry.entryid,
-      name: entry.name,
-      symptoms: entry.symptoms,
-      position: isLiveQueueStatus(status) ? (live?.position ?? entry.position) : entry.position,
-      status,
-      estimatedWait: isLiveQueueStatus(status) ? (live?.estimatedWait ?? entry.estimatedWait ?? '—') : '—',
-    };
-  });
-
-  async function markArrived() {
-    const waitingEntries = registrationEntries.filter((entry) => entry.status === 'waiting');
-    if (!waitingEntries.length) {
-      setActionMessage('No waiting children found to mark as arrived.');
-      return;
-    }
-
-    setActing(true);
-    setActionMessage(null);
-    try {
-      for (const entry of waitingEntries) {
-        const result = await patchQueueStatus(entry.entryid, 'arrived', 'Patient');
-        if (result.queue) setQueue(result.queue);
-      }
-      const credential = resumeView.resumeToken || resumeView.resumeCode;
-      if (credential) {
-        await refreshResume(credential);
-      }
-      setActionMessage('Arrival sent to staff successfully.');
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        setActionMessage('Not on clinic network yet. Staff can mark this from their dashboard.');
-      } else {
-        setActionMessage(error instanceof Error ? error.message : 'Unable to update arrival status.');
-      }
-    } finally {
-      setActing(false);
-    }
-  }
-
   return (
     <Screen>
       <BrandHeader />
@@ -395,16 +378,13 @@ export function StatusPage() {
         Queue access code: <code>{resumeView.resumeCode}</code>
       </p>
 
-      <div className="info-banner">We'll text you when it's almost your turn. You don't need to stay on this page.</div>
+      <div className="info-banner">
+        We&apos;ll text you when it&apos;s almost your turn. Staff will mark you as arrived when you reach the front desk.
+      </div>
 
       {actionMessage && <p className="action-msg">{actionMessage}</p>}
 
       <div className="stack">
-        <button type="button" className="btn btn--maroon" disabled={acting} onClick={markArrived}>
-          {acting ? 'Updating…' : "I've Arrived"}
-        </button>
-        <p className="muted">Let the front desk know you're in the building.</p>
-
         <button
           type="button"
           className="btn btn--outline"

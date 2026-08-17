@@ -1,3 +1,5 @@
+import { getClientTimezone, clientTimezoneHeaders } from '../utils/timezone';
+
 interface ErrorResponse {
   error?: string;
   details?: string[];
@@ -25,8 +27,15 @@ export function getApiBase() {
   return API_BASE;
 }
 
+export { getClientTimezone, clientTimezoneHeaders };
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const headers = new Headers(init?.headers);
+  if (!headers.has('X-Client-Timezone')) {
+    headers.set('X-Client-Timezone', getClientTimezone());
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   const text = await response.text();
   const data = text ? (JSON.parse(text) as unknown) : undefined;
 

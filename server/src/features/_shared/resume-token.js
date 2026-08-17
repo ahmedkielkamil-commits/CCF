@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const { client } = require('../../db/redis');
+const { query } = require('../../db/mysql');
 const { REDIS_KEYS } = require('../../constants');
+const { canUseMysql } = require('./store-health');
 
 const RESUME_TOKEN_TTL_SECONDS = 60 * 60 * 24;
 
@@ -130,32 +132,44 @@ async function getResumeSessionByCode(codeOrDisplay) {
   return getResumeSession(token);
 }
 
-async function cleanupIfRegistrationNotLive(registrationId) {
+async function registrationHasResumeAccess(registrationId) {
   const regId = Number(registrationId);
-  const raw = await client.get(REDIS_KEYS.resumeRegistration(regId));
-  if (!raw) return;
-  const { token, code } = JSON.parse(raw);
+
+  if (await canUseMysql()) {
+    const rows = await query(
+      `SELECT 1 FROM queue_entry
+       WHERE registrationid = ?
+         AND status IN ('waiting', 'arrived', 'roomed', 'completed')
+       LIMIT 1`,
+      [regId]
+    );
+    if (rows.length) return true;
+  }
 
   const liveIds = await client.zRange(REDIS_KEYS.live, 0, -1);
-  let hasLiveEntry = false;
-
   for (const entryId of liveIds) {
     const rawEntry = await client.get(REDIS_KEYS.entry(entryId));
     if (!rawEntry) continue;
     const entry = JSON.parse(rawEntry);
-    if (Number(entry.registrationid) === regId) {
-      hasLiveEntry = true;
-      break;
-    }
+    if (Number(entry.registrationid) === regId) return true;
   }
 
-  if (!hasLiveEntry) {
-    const multi = client.multi();
-    multi.del(REDIS_KEYS.resumeRegistration(regId));
-    if (token) multi.del(REDIS_KEYS.resumeToken(token));
-    if (code) multi.del(REDIS_KEYS.resumeCode(code));
-    await multi.exec();
-  }
+  return false;
+}
+
+async function cleanupIfRegistrationNotLive(registrationId) {
+  const regId = Number(registrationId);
+  if (await registrationHasResumeAccess(regId)) return;
+
+  const raw = await client.get(REDIS_KEYS.resumeRegistration(regId));
+  if (!raw) return;
+  const { token, code } = JSON.parse(raw);
+
+  const multi = client.multi();
+  multi.del(REDIS_KEYS.resumeRegistration(regId));
+  if (token) multi.del(REDIS_KEYS.resumeToken(token));
+  if (code) multi.del(REDIS_KEYS.resumeCode(code));
+  await multi.exec();
 }
 
 module.exports = {

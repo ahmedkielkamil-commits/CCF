@@ -18,8 +18,8 @@ describe('JoinPage', () => {
     const continueBtn = screen.getByRole('button', { name: 'Continue' });
     expect(continueBtn).toBeDisabled();
 
-    await user.type(screen.getByLabelText('Parent First Name'), 'Jane');
-    await user.type(screen.getByLabelText('Parent Last Name'), 'Doe');
+    await user.type(screen.getByLabelText('Parent/Guardian First Name'), 'Jane');
+    await user.type(screen.getByLabelText('Parent/Guardian Last Name'), 'Doe');
     expect(continueBtn).toBeDisabled();
 
     await user.type(screen.getByLabelText('Phone Number'), '5551234567');

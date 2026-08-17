@@ -3,6 +3,7 @@ const env = require('../config/env');
 const { safeLog } = require('../bus/hipaa/safeLog');
 const { REDIS_KEYS } = require('../constants');
 const { liveEntries } = require('../features/_shared/sync-mysql');
+const { normalizeRedisEntry } = require('../utils/datetime');
 
 const client = createClient({
   url: env.redisUrl,
@@ -33,6 +34,25 @@ async function clearLiveQueueKeys() {
   }
 }
 
+async function repairLiveQueueTimestamps() {
+  if (!client.isOpen) return { repaired: 0 };
+  let repaired = 0;
+  for await (const key of client.scanIterator({ MATCH: `${REDIS_KEYS.entry('*')}` })) {
+    const raw = await client.get(key);
+    if (!raw) continue;
+    const entry = JSON.parse(raw);
+    const normalized = normalizeRedisEntry(entry);
+    if (normalized.checked_in_at !== entry.checked_in_at) {
+      await client.set(key, JSON.stringify(normalized));
+      repaired += 1;
+    }
+  }
+  if (repaired > 0) {
+    safeLog.info('Repaired Redis queue entry timestamps', { repaired });
+  }
+  return { repaired };
+}
+
 async function reseedLiveQueueFromMysql(reason = 'manual') {
   if (!client.isOpen) return { seeded: false, reason: 'redis_closed' };
   if (reseedInFlight) return reseedInFlight;
@@ -43,6 +63,11 @@ async function reseedLiveQueueFromMysql(reason = 'manual') {
       rows = await liveEntries();
     } catch (err) {
       safeLog.warn('Skipping Redis reseed; MySQL unavailable', { reason, message: err.message });
+      try {
+        await repairLiveQueueTimestamps();
+      } catch (repairErr) {
+        safeLog.warn('Redis timestamp repair skipped', { message: repairErr.message });
+      }
       return { seeded: false, reason: 'mysql_unavailable' };
     }
 
@@ -56,19 +81,18 @@ async function reseedLiveQueueFromMysql(reason = 'manual') {
         multi.zAdd(REDIS_KEYS.live, { score: position, value: String(entryId) });
         multi.set(
           REDIS_KEYS.entry(entryId),
-          JSON.stringify({
-            entryid: entryId,
-            registrationid: Number(row.registrationid),
-            fname: row.fname,
-            lname: row.lname,
-            symptoms: row.symptoms,
-            checked_in_at:
-              row.checked_in_at instanceof Date
-                ? row.checked_in_at.toISOString()
-                : String(row.checked_in_at || ''),
-            position,
-            status: row.status,
-          })
+          JSON.stringify(
+            normalizeRedisEntry({
+              entryid: entryId,
+              registrationid: Number(row.registrationid),
+              fname: row.fname,
+              lname: row.lname,
+              symptoms: row.symptoms,
+              checked_in_at: row.checked_in_at,
+              position,
+              status: row.status,
+            })
+          )
         );
       }
       await multi.exec();
@@ -96,4 +120,4 @@ async function closeRedis() {
   }
 }
 
-module.exports = { client, connectRedis, closeRedis, reseedLiveQueueFromMysql };
+module.exports = { client, connectRedis, closeRedis, reseedLiveQueueFromMysql, repairLiveQueueTimestamps };

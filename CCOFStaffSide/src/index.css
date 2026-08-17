@@ -696,6 +696,14 @@ body {
   color: var(--maroon);
 }
 
+.countdown-cell--ok {
+  color: #027a48;
+}
+
+.countdown-cell--warning {
+  color: #e5ad24;
+}
+
 .countdown-cell--overdue {
   color: #b42318;
 }

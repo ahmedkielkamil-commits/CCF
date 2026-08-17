@@ -21,6 +21,7 @@ export interface WaitInterval {
 
 export interface QueuePayload {
   entries: QueueEntry[];
+  inRoom: QueueEntry[];
   roomingInterval: WaitInterval;
   updatedAt: string;
 }

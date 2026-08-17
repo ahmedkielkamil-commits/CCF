@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "seed:both": "python3 scripts/seed_both.py",
+    "seed:mirror": "python3 scripts/seed_both.py --mirror-only"
   },
   "engines": {
     "node": ">=18"

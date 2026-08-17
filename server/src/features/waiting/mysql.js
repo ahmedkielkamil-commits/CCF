@@ -1,4 +1,5 @@
 const { pool } = require('../../db/mysql');
+const { formatDbDatetimeForApi } = require('../../utils/datetime');
 
 async function reserve(n) {
   const conn = await pool.getConnection();
@@ -56,10 +57,7 @@ async function insert(body, positions, options = {}) {
       `SELECT checked_in_at FROM registration WHERE registrationid = ?`,
       [registrationid]
     );
-    const insertedCheckedInAt =
-      regRows[0]?.checked_in_at instanceof Date
-        ? regRows[0].checked_in_at.toISOString()
-        : String(regRows[0]?.checked_in_at ?? new Date().toISOString());
+    const insertedCheckedInAt = formatDbDatetimeForApi(regRows[0]?.checked_in_at) || new Date().toISOString();
     for (let i = 0; i < body.children.length; i++) {
       const c = body.children[i];
       const [row] = await conn.query(
@@ -104,10 +102,7 @@ async function appendChildren(registrationid, children, positions) {
     }
     const parentFname = regRows[0].parent_fname;
     const parentLname = regRows[0].parent_lname;
-    const checkedInAt =
-      regRows[0].checked_in_at instanceof Date
-        ? regRows[0].checked_in_at.toISOString()
-        : String(regRows[0].checked_in_at ?? new Date().toISOString());
+    const checkedInAt = formatDbDatetimeForApi(regRows[0].checked_in_at) || new Date().toISOString();
 
     for (let i = 0; i < children.length; i++) {
       const c = children[i];

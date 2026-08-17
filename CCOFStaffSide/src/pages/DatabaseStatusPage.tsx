@@ -3,7 +3,7 @@ import { ApiError } from '../api/client';
 import { fetchHealth, fetchSyncReport, fetchWaitInterval, type SyncRow } from '../api/queue';
 import { StaffPageHeader } from '../components/staff-ui';
 import { SystemHealthBar } from '../components/SystemHealthBar';
-import { formatCountdown, formatWaitRange, getRemainingSeconds, patientName } from '../utils/syncDisplay';
+import { countdownCellClass, formatCountdown, formatWaitRange, getRemainingSeconds, patientName } from '../utils/syncDisplay';
 
 function LiveStoreTable({
   title,
@@ -48,7 +48,7 @@ function LiveStoreTable({
                     <td>{patientName(row)}</td>
                     <td>{row.status}</td>
                     <td>{waitText}</td>
-                    <td className="countdown-cell">{formatCountdown(remainingSeconds)}</td>
+                    <td className={countdownCellClass(remainingSeconds)}>{formatCountdown(remainingSeconds)}</td>
                   </tr>
                 );
               })}

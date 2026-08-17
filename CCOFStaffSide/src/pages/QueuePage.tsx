@@ -5,13 +5,12 @@ import { patchQueueStatus } from '../api/queue';
 import { StaffPageHeader, StatusBadge } from '../components/staff-ui';
 import { useQueue } from '../hooks/useQueue';
 import { useStaffName } from '../hooks/useStaffName';
-import type { QueueStatus } from '../types/queue';
-import { formatCountdown, getRemainingSeconds } from '../utils/syncDisplay';
+import type { QueueEntry, QueueStatus } from '../types/queue';
+import { countdownCellClass, formatCountdown, getRemainingSeconds } from '../utils/syncDisplay';
 
-function nextAction(status: QueueStatus) {
+function nextLiveAction(status: QueueStatus) {
   if (status === 'waiting') return { label: 'Mark as Arrived', next: 'arrived' as QueueStatus };
   if (status === 'arrived') return { label: 'Room Now', next: 'roomed' as QueueStatus };
-  if (status === 'roomed') return { label: 'Complete', next: 'completed' as QueueStatus };
   return null;
 }
 
@@ -20,6 +19,46 @@ function formatCheckInTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function QueueActions({
+  entry,
+  onUpdate,
+}: {
+  entry: QueueEntry;
+  onUpdate: (entryId: number, status: QueueStatus) => void;
+}) {
+  const liveAction = nextLiveAction(entry.status);
+  const showComplete = entry.status === 'roomed';
+  const showNoShow = entry.status === 'waiting' || entry.status === 'arrived' || entry.status === 'roomed';
+
+  return (
+    <div className="row-actions">
+      {liveAction && (
+        <button
+          type="button"
+          className="action-btn action-btn--primary"
+          onClick={() => onUpdate(entry.entryid, liveAction.next)}
+        >
+          {liveAction.label}
+        </button>
+      )}
+      {showComplete && (
+        <button
+          type="button"
+          className="action-btn action-btn--primary"
+          onClick={() => onUpdate(entry.entryid, 'completed')}
+        >
+          Complete Visit
+        </button>
+      )}
+      {showNoShow && (
+        <button type="button" className="action-btn" onClick={() => onUpdate(entry.entryid, 'no_show')}>
+          No Show
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function QueuePage() {
@@ -47,8 +86,9 @@ export function QueuePage() {
     }
   }
 
-  const rows = queue?.entries ?? [];
-  const currentWait = rows[0]?.estimatedWait ?? `${queue?.roomingInterval.minutes ?? 15} min`;
+  const liveRows = queue?.entries ?? [];
+  const inRoomRows = queue?.inRoom ?? [];
+  const currentWait = liveRows[0]?.estimatedWait ?? `${queue?.roomingInterval.minutes ?? 15} min`;
 
   return (
     <>
@@ -68,7 +108,7 @@ export function QueuePage() {
       <section className="panel">
         <div className="panel__head">
           <h2>Current Walk-In Queue</h2>
-          <span className="count-badge">{rows.length}</span>
+          <span className="count-badge">{liveRows.length}</span>
         </div>
 
         <div className="table-wrap">
@@ -87,11 +127,11 @@ export function QueuePage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((entry) => {
-                const action = nextAction(entry.status);
+              {liveRows.map((entry) => {
                 const remainingSeconds = getRemainingSeconds(entry, intervalMinutes, nowMs);
                 const isOverdue =
-                  remainingSeconds === 0 &&
+                  remainingSeconds != null &&
+                  remainingSeconds < 0 &&
                   (entry.status === 'waiting' || entry.status === 'arrived');
                 return (
                   <tr key={entry.entryid} className={isOverdue ? 'queue-row--overdue' : undefined}>
@@ -106,7 +146,7 @@ export function QueuePage() {
                     <td>{entry.symptoms}</td>
                     <td>{entry.estimatedWait}</td>
                     <td
-                      className={`countdown-cell${isOverdue ? ' countdown-cell--overdue' : ''}`}
+                      className={countdownCellClass(remainingSeconds)}
                       title={isOverdue ? 'Estimated wait exceeded' : undefined}
                     >
                       {formatCountdown(remainingSeconds)}
@@ -115,26 +155,7 @@ export function QueuePage() {
                       <StatusBadge status={entry.status} />
                     </td>
                     <td>
-                      <div className="row-actions">
-                        {action && (
-                          <button
-                            type="button"
-                            className="action-btn action-btn--primary"
-                            onClick={() => updateStatus(entry.entryid, action.next)}
-                          >
-                            {action.label}
-                          </button>
-                        )}
-                        {entry.status !== 'completed' && (
-                          <button
-                            type="button"
-                            className="action-btn"
-                            onClick={() => updateStatus(entry.entryid, 'no_show')}
-                          >
-                            No Show
-                          </button>
-                        )}
-                      </div>
+                      <QueueActions entry={entry} onUpdate={updateStatus} />
                     </td>
                   </tr>
                 );
@@ -146,6 +167,50 @@ export function QueuePage() {
         <p className="muted panel__foot">
           Last updated: {queue ? new Date(queue.updatedAt).toLocaleTimeString() : '—'}
         </p>
+      </section>
+
+      <section className="panel">
+        <div className="panel__head">
+          <h2>In Room</h2>
+          <span className="count-badge">{inRoomRows.length}</span>
+        </div>
+
+        {inRoomRows.length === 0 ? (
+          <p className="muted panel__foot">No patients currently in exam rooms.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Patient Name</th>
+                  <th>Parent Name</th>
+                  <th>Checked In</th>
+                  <th>Symptom</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inRoomRows.map((entry) => (
+                  <tr key={entry.entryid}>
+                    <td>
+                      {entry.fname} {entry.lname}
+                    </td>
+                    <td>{`${entry.parent_fname ?? ''} ${entry.parent_lname ?? ''}`.trim() || '—'}</td>
+                    <td>{formatCheckInTime(entry.checked_in_at)}</td>
+                    <td>{entry.symptoms}</td>
+                    <td>
+                      <StatusBadge status={entry.status} />
+                    </td>
+                    <td>
+                      <QueueActions entry={entry} onUpdate={updateStatus} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </>
   );

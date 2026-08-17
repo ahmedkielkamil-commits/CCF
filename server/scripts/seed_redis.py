@@ -2,10 +2,9 @@
 """
 Reset MySQL + Redis to the predefined seed state (default) or seed from fallback JSON.
 
-Default behavior (MySQL source) resets MySQL from CCoFSchema.sql first — dropping the
-tables, recreating them, and re-inserting the predefined rows — then loads
-scripts/demo_history.sql (~14 days of MySQL-only analytics history). Only the live
-queue (entries 1-3) is mirrored into Redis. Historical rows stay in MySQL for reports.
+Default behavior (MySQL source) resets MySQL from CCoFSchema.sql — dropping the
+tables, recreating them, and re-inserting the predefined rows plus ~14 days of
+MySQL-only analytics history. Only the live queue (entries 1-3) is mirrored into Redis.
 
 WARNING: the default run is destructive. It wipes ALL MySQL data (including live
 check-ins added through the app and audit history). Use --no-reset-schema to instead
@@ -32,7 +31,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 try:
@@ -52,11 +51,26 @@ except ImportError:
 SERVER_DIR = Path(__file__).resolve().parent.parent
 DUMMY_PATH = SERVER_DIR / "public" / "dummy.json"
 SCHEMA_PATH = SERVER_DIR / "CCoFSchema.sql"
-DEMO_HISTORY_PATH = SERVER_DIR / "scripts" / "demo_history.sql"
 ENV_PATH = SERVER_DIR / ".env"
 
 LIVE_KEY = "queue:live"
 ENTRY_PREFIX = "queue:entry:"
+
+
+def normalize_checked_in_at(value) -> str:
+    """Match server formatDbDatetimeForApi: naive MySQL/Redis datetimes are UTC wall clock."""
+    if isinstance(value, datetime):
+        dt = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    raw = str(value or "").strip()
+    if not raw:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    if raw.endswith("Z"):
+        return raw if "." in raw else raw.replace("Z", ".000Z")
+    if "T" in raw:
+        base = raw.split("+")[0].split(".")[0]
+        return f"{base}.000Z"
+    return f"{raw.replace(' ', 'T')}.000Z"
 
 
 def load_dotenv() -> dict[str, str]:
@@ -129,9 +143,8 @@ def run_mysql_sql_file(mysql_config: dict, path: Path, *, connect_without_db: bo
 
 
 def reset_mysql_schema(mysql_config: dict) -> None:
-    """Drop, recreate, and re-seed MySQL from CCoFSchema.sql + demo history (destructive)."""
+    """Drop, recreate, and re-seed MySQL from CCoFSchema.sql (destructive)."""
     run_mysql_sql_file(mysql_config, SCHEMA_PATH, connect_without_db=True)
-    run_mysql_sql_file(mysql_config, DEMO_HISTORY_PATH)
 
 
 def load_patients_from_mysql(mysql_config: dict, refresh_checkin_now: bool = True) -> list[dict]:
@@ -180,11 +193,7 @@ def load_patients_from_mysql(mysql_config: dict, refresh_checkin_now: bool = Tru
 
     patients: list[dict] = []
     for row in rows:
-        checked_in_at = row.get("checked_in_at")
-        if isinstance(checked_in_at, datetime):
-            checked_in_at_str = checked_in_at.isoformat(timespec="seconds")
-        else:
-            checked_in_at_str = str(checked_in_at) if checked_in_at else datetime.now().isoformat(timespec="seconds")
+        checked_in_at_str = normalize_checked_in_at(row.get("checked_in_at"))
 
         patients.append(
             {
@@ -214,7 +223,7 @@ def seed(r: redis.Redis, patients: list[dict]) -> None:
     for p in patients:
         entry_id = str(p["entryid"])
         position = int(p["position"])
-        checked_in_at = p.get("checked_in_at") or datetime.now().isoformat(timespec="seconds")
+        checked_in_at = normalize_checked_in_at(p.get("checked_in_at"))
         redis_entry = {
             "entryid": p["entryid"],
             "registrationid": p["registrationid"],
@@ -282,7 +291,7 @@ def main() -> None:
             if not args.no_reset_schema:
                 reset_mysql_schema(mysql_config)
                 print(
-                    "Reset MySQL from CCoFSchema.sql + demo_history.sql "
+                    "Reset MySQL from CCoFSchema.sql "
                     "(live queue + ~14 days analytics history)"
                 )
             patients = load_patients_from_mysql(mysql_config, refresh_checkin_now=not args.keep_checkin_times)

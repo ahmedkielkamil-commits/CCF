@@ -14,7 +14,6 @@ export function JoinPage() {
     setPhone,
     setNumberOfChildren,
     setSmsOptIn,
-    setAdditionalNotes,
     startAppend,
     resetDraft,
   } = useCheckInDraft();
@@ -56,7 +55,7 @@ export function JoinPage() {
         {!isAppend && (
           <>
             <label className="field-label" htmlFor="parentFirstName">
-              Parent First Name
+              Parent/Guardian First Name
             </label>
             <input
               id="parentFirstName"
@@ -66,7 +65,7 @@ export function JoinPage() {
             />
 
             <label className="field-label" htmlFor="parentLastName">
-              Parent Last Name
+              Parent/Guardian Last Name
             </label>
             <input
               id="parentLastName"
@@ -126,17 +125,6 @@ export function JoinPage() {
                 <small>You can opt out at any time by replying STOP</small>
               </span>
             </label>
-
-            <label className="field-label" htmlFor="notes">
-              Additional Notes
-            </label>
-            <textarea
-              id="notes"
-              className="textarea"
-              rows={3}
-              value={draft.additionalNotes}
-              onChange={(event) => setAdditionalNotes(event.target.value)}
-            />
           </>
         )}
       </section>
